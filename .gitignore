@@ -1,0 +1,28 @@
+## Flutter / Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+.pub-cache/
+.pub/
+
+## Configuración con datos sensibles -- NUNCA se sube
+android/app/google-services.json
+android/key.properties
+*.jks
+*.keystore
+
+## Android/iOS locales
+android/.gradle/
+android/local.properties
+ios/Flutter/Flutter.podspec
+ios/Pods/
+
+## Zips de trabajo
+*.zip
+
+## IDs de editor
+.idea/
+*.iml
+.vscode/

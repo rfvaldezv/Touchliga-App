@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Permite tráfico HTTP sin cifrar (no HTTPS) durante desarrollo.
+  Android bloquea esto por defecto desde la versión 9. Sin este
+  archivo, la app no puede hablar con la API local por
+  http://10.0.2.2:5024 (emulador) ni por la IP de tu PC en la red
+  local (celular físico), aunque el navegador del propio dispositivo
+  sí pueda — el navegador no tiene esta restricción, las apps sí.
+
+  IMPORTANTE: antes de publicar en producción, esto debe quitarse
+  (o acotarse solo al dominio real de la API, que en producción sí
+  debe ser HTTPS). Ver AndroidManifest.xml donde se referencia.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

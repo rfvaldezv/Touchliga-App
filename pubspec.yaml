@@ -1,0 +1,77 @@
+flutter:
+
+  uses-material-design: true
+
+  assets:
+    - assets/logos/
+    - assets/backgrounds/
+    - assets/icons/
+    - assets/images/
+    - assets/sponsors/
+    - assets/animations/
+
+sdk: flutter
+
+name: touchliga
+description: Plataforma Integral de Pronósticos Deportivos
+
+publish_to: "none"
+
+environment:
+  sdk: ">=3.9.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+
+  # Estado
+  flutter_riverpod: ^2.6.1
+
+  # Navegación
+  go_router: ^16.0.0
+
+  # HTTP
+  dio: ^5.9.0
+  image_picker: ^1.1.2
+  file_picker: ^10.3.7
+  firebase_core: ^3.8.0
+  firebase_messaging: ^15.1.6
+  pretty_dio_logger: ^1.4.0
+
+  # Persistencia
+  flutter_secure_storage: ^9.2.4
+  shared_preferences: ^2.5.3
+
+  # Modelos
+  equatable: ^2.0.7
+  json_annotation: ^4.9.0
+
+  # Utilidades
+  intl: ^0.20.2
+  logger: ^2.6.1
+  connectivity_plus: ^7.0.0
+  package_info_plus: ^9.0.0
+
+  # UI
+  google_fonts: ^6.3.0
+  cached_network_image: ^3.4.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^6.0.0
+
+  build_runner: ^2.6.0
+  json_serializable: ^6.11.1
+  
+  freezed_annotation:
+
+  flutter_svg:
+
+  url_launcher:
+
+  freezed:
+      
