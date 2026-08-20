@@ -387,6 +387,9 @@ Future<void> _mostrarDialogoCambiarPassword(BuildContext context, WidgetRef ref)
   final nuevaController = TextEditingController();
   final confirmarController = TextEditingController();
   var enviando = false;
+  var mostrarActual = false;
+  var mostrarNueva = false;
+  var mostrarConfirmar = false;
   String? error;
 
   await showDialog<void>(
@@ -402,21 +405,37 @@ Future<void> _mostrarDialogoCambiarPassword(BuildContext context, WidgetRef ref)
                 children: [
                   TextField(
                     controller: actualController,
-                    obscureText: true,
-                    decoration: const InputDecoration(labelText: 'Contraseña actual'),
+                    obscureText: !mostrarActual,
+                    decoration: InputDecoration(
+                      labelText: 'Contraseña actual',
+                      suffixIcon: IconButton(
+                        icon: Icon(mostrarActual ? Icons.visibility_off : Icons.visibility),
+                        onPressed: () => setState(() => mostrarActual = !mostrarActual),
+                      ),
+                    ),
                   ),
                   TextField(
                     controller: nuevaController,
-                    obscureText: true,
-                    decoration: const InputDecoration(
+                    obscureText: !mostrarNueva,
+                    decoration: InputDecoration(
                       labelText: 'Nueva contraseña',
                       helperText: 'Mínimo 6 caracteres',
+                      suffixIcon: IconButton(
+                        icon: Icon(mostrarNueva ? Icons.visibility_off : Icons.visibility),
+                        onPressed: () => setState(() => mostrarNueva = !mostrarNueva),
+                      ),
                     ),
                   ),
                   TextField(
                     controller: confirmarController,
-                    obscureText: true,
-                    decoration: const InputDecoration(labelText: 'Confirmar nueva contraseña'),
+                    obscureText: !mostrarConfirmar,
+                    decoration: InputDecoration(
+                      labelText: 'Confirmar nueva contraseña',
+                      suffixIcon: IconButton(
+                        icon: Icon(mostrarConfirmar ? Icons.visibility_off : Icons.visibility),
+                        onPressed: () => setState(() => mostrarConfirmar = !mostrarConfirmar),
+                      ),
+                    ),
                   ),
                   if (error != null) ...[
                     const SizedBox(height: 8),

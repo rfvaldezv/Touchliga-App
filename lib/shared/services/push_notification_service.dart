@@ -2,6 +2,8 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../core/network/api_client.dart';
+import '../../main.dart' show container;
+import '../../modules/communication/providers/communication_provider.dart';
 
 /// Registra este dispositivo para recibir notificaciones push, y
 /// las procesa cuando llegan con la app abierta (primer plano).
@@ -42,10 +44,11 @@ class PushNotificationService {
       mensajeria.onTokenRefresh.listen(_registrarEnBackend);
 
       // Con la app abierta, Firebase no muestra la notificación del
-      // sistema sola — aquí se podría mostrar un aviso dentro de la
-      // app (SnackBar, banner, etc.) si más adelante se quiere.
+      // sistema sola — pero sí actualizamos de inmediato el globo de
+      // mensajes sin leer, para que se note algo cambió.
       FirebaseMessaging.onMessage.listen((mensaje) {
         debugPrint('Push recibido en primer plano: ${mensaje.notification?.title}');
+        container.invalidate(mensajesNoLeidosProvider);
       });
 
       _yaInicializado = true;

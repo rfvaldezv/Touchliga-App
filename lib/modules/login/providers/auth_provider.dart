@@ -24,7 +24,19 @@ final authProvider = StateNotifierProvider<AuthNotifier, LoginState>((ref) {
 });
 
 class AuthNotifier extends StateNotifier<LoginState> {
-  AuthNotifier(this._service) : super(const LoginState());
+  AuthNotifier(this._service) : super(const LoginState()) {
+    // Un solo lugar donde la app entera se entera de que el token ya
+    // no sirve (ni con refresh) -- ver el comentario en ApiClient.
+    ApiClient.onSesionExpirada = (mensaje) {
+      state = state.copyWith(
+        loading: false,
+        authenticated: false,
+        token: null,
+        user: null,
+        errorMessage: mensaje,
+      );
+    };
+  }
 
   final AuthService _service;
 

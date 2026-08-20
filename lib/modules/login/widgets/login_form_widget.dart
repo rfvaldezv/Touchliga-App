@@ -93,10 +93,10 @@ class _LoginFormWidgetState extends ConsumerState<LoginFormWidget> {
                   return 'Ingrese la contraseña';
                 }
 
-                if (value.length < 6) {
-                  return 'La contraseña debe tener al menos 6 caracteres';
-                }
-
+                // Sin mínimo de longitud aquí -- por consistencia con
+                // FutLiga, donde algunos participantes migrados
+                // heredaron contraseñas cortas. El mínimo de 6 solo
+                // aplica al crear/restablecer, no al iniciar sesión.
                 return null;
               },
               onFieldSubmitted: (_) async {

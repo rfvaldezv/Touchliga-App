@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../app/constants/asset_paths.dart';
 import '../../../shared/design_system/tokens/app_radius.dart';
@@ -65,6 +66,19 @@ class LoginPage extends ConsumerWidget {
                           borderRadius: BorderRadius.circular(AppRadius.lg),
                         ),
                         child: const LoginFormWidget(),
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    TextButton(
+                      onPressed: () async {
+                        final uri = Uri.parse('https://app.touchliga.com/convocatoria.html');
+                        if (await canLaunchUrl(uri)) {
+                          await launchUrl(uri, mode: LaunchMode.externalApplication);
+                        }
+                      },
+                      child: const Text(
+                        'Ver convocatoria',
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
                       ),
                     ),
                   ],

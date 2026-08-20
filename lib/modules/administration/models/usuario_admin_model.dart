@@ -9,6 +9,11 @@ class UsuarioAdminModel {
     required this.estatus,
     required this.roles,
     this.invitadoPorNombre,
+    this.parejaId,
+    this.parejaNombre,
+    this.nombreEquipo,
+    this.correoAlterna,
+    this.esCuentaVinculada = false,
     this.ciudadId,
     this.ciudadNombre,
     this.paisId,
@@ -26,6 +31,11 @@ class UsuarioAdminModel {
   final String estatus;
   final List<String> roles;
   final String? invitadoPorNombre;
+  final int? parejaId;
+  final String? parejaNombre;
+  final String? nombreEquipo;
+  final String? correoAlterna;
+  final bool esCuentaVinculada;
   final int? ciudadId;
   final String? ciudadNombre;
   final int? paisId;
@@ -46,6 +56,11 @@ class UsuarioAdminModel {
       estatus: (json['estatus'] ?? 'Activo').toString(),
       roles: (json['roles'] as List?)?.map((e) => e.toString()).toList() ?? const [],
       invitadoPorNombre: json['invitadoPorNombre']?.toString(),
+      parejaId: (json['parejaId'] as num?)?.toInt(),
+      parejaNombre: json['parejaNombre']?.toString(),
+      nombreEquipo: json['nombreEquipo']?.toString(),
+      correoAlterna: json['correoAlterna']?.toString(),
+      esCuentaVinculada: json['esCuentaVinculada'] ?? false,
       ciudadId: (json['ciudadId'] as num?)?.toInt(),
       ciudadNombre: json['ciudadNombre']?.toString(),
       paisId: (json['paisId'] as num?)?.toInt(),

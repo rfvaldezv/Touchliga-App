@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../shared/design_system/tokens/app_spacing.dart';
 import '../../../shared/providers/catalogos_provider.dart';
 import '../../equipos/models/equipo_model.dart';
 import '../../equipos/providers/equipo_provider.dart';
+import '../../reportes/providers/reportes_provider.dart';
+import '../../../shared/utils/pdf_downloader.dart';
 import '../models/partido_model.dart';
 import '../providers/administration_provider.dart';
 
@@ -27,6 +30,16 @@ class AdminJornadaDetailPage extends ConsumerWidget {
       appBar: AppBar(
         title: Text('Jornada #$jornadaId'),
         actions: [
+          IconButton(
+            tooltip: 'Quién falta por capturar',
+            icon: const Icon(Icons.person_search_outlined),
+            onPressed: () => context.push('/administration/jornadas/$jornadaId/pendientes'),
+          ),
+          IconButton(
+            tooltip: 'Generar PDF de auditoría',
+            icon: const Icon(Icons.picture_as_pdf_outlined),
+            onPressed: () => _generarPdfAuditoria(context, ref, jornadaId),
+          ),
           if (yaCerrada)
             TextButton.icon(
               onPressed: () => _confirmarAbrirJornada(context, ref),
@@ -195,6 +208,21 @@ class AdminJornadaDetailPage extends ConsumerWidget {
           SnackBar(content: Text('No se pudo cerrar: $e')),
         );
       }
+    }
+  }
+
+  Future<void> _generarPdfAuditoria(BuildContext context, WidgetRef ref, int jornadaId) async {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(const SnackBar(content: Text('Generando PDF...'), duration: Duration(seconds: 30)));
+
+    try {
+      final bytes = await ref.read(reportesServiceProvider).getReporteAuditoriaPdf(jornadaId);
+      descargarPdf(bytes, 'Jornada_${jornadaId}_Auditoria.pdf');
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(const SnackBar(content: Text('PDF descargado -- ya puedes compartirlo en WhatsApp.')));
+    } catch (e) {
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(SnackBar(content: Text('No se pudo generar el PDF: $e')));
     }
   }
 

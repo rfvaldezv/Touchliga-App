@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -58,7 +59,7 @@ class AppDrawer extends ConsumerWidget {
           ListTile(
             leading: const Icon(Icons.emoji_events),
             title: const Text("Clasificación"),
-            onTap: () => navigate(AppRouteNames.standings),
+            onTap: () => navigate('/administration/ranking'),
           ),
 
           ListTile(
@@ -73,11 +74,12 @@ class AppDrawer extends ConsumerWidget {
             onTap: () => navigate(AppRouteNames.messages),
           ),
 
-          ListTile(
-            leading: const Icon(Icons.credit_card),
-            title: const Text("Mi pago"),
-            onTap: () => navigate(AppRouteNames.miPago),
-          ),
+          if (kIsWeb)
+            ListTile(
+              leading: const Icon(Icons.credit_card),
+              title: const Text("Mi pago"),
+              onTap: () => navigate(AppRouteNames.miPago),
+            ),
 
           ListTile(
             leading: const Icon(Icons.emoji_events),

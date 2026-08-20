@@ -106,4 +106,10 @@ class CommunicationService {
   Future<void> marcarConversacionLeida(int otroUsuarioId) async {
     await _apiClient.post('/api/mensajes/conversacion/$otroUsuarioId/marcar-leida');
   }
+
+  /// Total de mensajes sin leer -- para el globo/badge de la barra
+  /// de navegación.
+  Future<int> getMensajesNoLeidos() async {
+    return _apiClient.getForValue<int>('/api/mensajes/no-leidos');
+  }
 }

@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -129,6 +131,10 @@ class _AdminUsuariosPageState extends ConsumerState<AdminUsuariosPage> {
                         usuario.correo,
                         if (usuario.ciudadNombre != null) usuario.ciudadNombre!,
                         if (usuario.invitadoPorNombre != null) 'Invitó: ${usuario.invitadoPorNombre}',
+                        if (usuario.parejaNombre != null)
+                          usuario.nombreEquipo != null
+                              ? '💑 "${usuario.nombreEquipo}" (${usuario.parejaNombre})'
+                              : '💑 ${usuario.parejaNombre}',
                       ].join(' · '),
                     ),
                     trailing: Wrap(
@@ -163,14 +169,9 @@ class _AdminUsuariosPageState extends ConsumerState<AdminUsuariosPage> {
                             visualDensity: VisualDensity.compact,
                           ),
                         IconButton(
-                          icon: const Icon(Icons.edit_outlined),
-                          tooltip: 'Editar información',
-                          onPressed: () => _showEditarInfoDialog(context, ref, usuario),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.admin_panel_settings_outlined),
-                          tooltip: 'Asignar rol',
-                          onPressed: () => _showAsignarRolDialog(context, ref, usuario),
+                          icon: const Icon(Icons.more_vert),
+                          tooltip: 'Más opciones',
+                          onPressed: () => _showMasOpciones(context, ref, usuario),
                         ),
                       ],
                     ),
@@ -189,6 +190,240 @@ class _AdminUsuariosPageState extends ConsumerState<AdminUsuariosPage> {
         icon: const Icon(Icons.person_add),
         label: const Text('Nuevo participante'),
       ),
+    );
+  }
+
+  Future<void> _showAsignarParejaDialog(
+    BuildContext context,
+    WidgetRef ref,
+    UsuarioAdminModel usuario,
+  ) async {
+    final todos = await ref.read(usuariosProvider.future);
+    final candidatos = todos.where((u) => u.id != usuario.id).toList()
+      ..sort((a, b) => a.nombreCompleto.compareTo(b.nombreCompleto));
+
+    var seleccionado = usuario.parejaId;
+    final nombreEquipoController = TextEditingController(text: usuario.nombreEquipo ?? '');
+
+    if (!context.mounted) return;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (dialogContext, setState) {
+            return AlertDialog(
+              title: Text('Vincular pareja de ${usuario.nombreCompleto}'),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'Solo visual -- no afecta pronósticos, puntos ni el acceso de ninguno de los 2.',
+                      style: TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    DropdownButtonFormField<int?>(
+                      initialValue: seleccionado,
+                      isExpanded: true,
+                      decoration: const InputDecoration(labelText: 'Pareja'),
+                      items: [
+                        const DropdownMenuItem<int?>(value: null, child: Text('(Ninguna)')),
+                        for (final c in candidatos)
+                          DropdownMenuItem<int?>(value: c.id, child: Text(c.nombreCompleto)),
+                      ],
+                      onChanged: (value) => setState(() => seleccionado = value),
+                    ),
+                    if (seleccionado != null) ...[
+                      const SizedBox(height: AppSpacing.sm),
+                      TextField(
+                        controller: nombreEquipoController,
+                        decoration: const InputDecoration(
+                          labelText: 'Apodo del equipo (opcional)',
+                          hintText: 'ej. Los Tigres del Amor',
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Cancelar'),
+                ),
+                FilledButton(
+                  onPressed: () async {
+                    await ref
+                        .read(usuariosServiceProvider)
+                        .asignarPareja(
+                          usuarioId: usuario.id,
+                          parejaId: seleccionado,
+                          nombreEquipo: nombreEquipoController.text.trim().isEmpty
+                              ? null
+                              : nombreEquipoController.text.trim(),
+                        );
+                    ref.invalidate(usuariosProvider);
+                    if (dialogContext.mounted) Navigator.of(dialogContext).pop();
+                  },
+                  child: const Text('Guardar'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _showCredencialAlternaDialog(
+    BuildContext context,
+    WidgetRef ref,
+    UsuarioAdminModel usuario,
+  ) async {
+    final todos = await ref.read(usuariosProvider.future);
+    // No se excluye a quienes ya están vinculados -- puede que sea
+    // justo la persona que quieres volver a vincular (para refrescar
+    // su correo/contraseña copiados). El backend decide si se
+    // permite o no según a quién esté vinculada actualmente.
+    final candidatos = todos.where((u) => u.id != usuario.id).toList()
+      ..sort((a, b) => a.nombreCompleto.compareTo(b.nombreCompleto));
+
+    UsuarioAdminModel? seleccionado;
+    if (usuario.correoAlterna != null) {
+      final coincidencia = todos.where((u) => u.correo == usuario.correoAlterna);
+      if (coincidencia.isNotEmpty) seleccionado = coincidencia.first;
+    }
+
+    var enviando = false;
+    String? error;
+
+    if (!context.mounted) return;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (dialogContext, setState) {
+            return AlertDialog(
+              title: Text('Segundo acceso de ${usuario.nombreCompleto}'),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Elige a un participante YA REGISTRADO -- entra con su correo y '
+                      'contraseña de siempre (nada nuevo que capturar), pero lo lleva '
+                      'directo a esta cuenta (mismos pronósticos, mismos puntos). Deja '
+                      'de jugar por su cuenta propia.',
+                      style: TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    Autocomplete<UsuarioAdminModel>(
+                      initialValue: TextEditingValue(text: seleccionado?.nombreCompleto ?? ''),
+                      displayStringForOption: (u) => '${u.nombreCompleto} (${u.correo})',
+                      optionsBuilder: (textEditingValue) {
+                        final busqueda = textEditingValue.text.trim().toLowerCase();
+                        if (busqueda.isEmpty) return candidatos;
+                        return candidatos.where(
+                          (u) =>
+                              u.nombreCompleto.toLowerCase().contains(busqueda) ||
+                              u.correo.toLowerCase().contains(busqueda),
+                        );
+                      },
+                      onSelected: (u) => setState(() => seleccionado = u),
+                      fieldViewBuilder: (context, controller, focusNode, onSubmitted) {
+                        return TextField(
+                          controller: controller,
+                          focusNode: focusNode,
+                          decoration: const InputDecoration(
+                            labelText: 'Buscar participante ya registrado',
+                            prefixIcon: Icon(Icons.search),
+                          ),
+                        );
+                      },
+                    ),
+                    if (seleccionado != null) ...[
+                      const SizedBox(height: 4),
+                      Chip(
+                        avatar: const Icon(Icons.check_circle, size: 16, color: Colors.green),
+                        label: Text(seleccionado!.correo),
+                        onDeleted: () => setState(() => seleccionado = null),
+                      ),
+                    ],
+                    if (error != null) ...[
+                      const SizedBox(height: AppSpacing.sm),
+                      Text(error!, style: const TextStyle(color: Colors.red, fontSize: 12)),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                if (usuario.correoAlterna != null && seleccionado != null)
+                  TextButton(
+                    onPressed: enviando
+                        ? null
+                        : () async {
+                            setState(() => enviando = true);
+                            try {
+                              await ref.read(usuariosServiceProvider).desvincularParticipante(
+                                    usuarioObjetivoId: usuario.id,
+                                    usuarioVinculadoId: seleccionado!.id,
+                                  );
+                              ref.invalidate(usuariosProvider);
+                              if (dialogContext.mounted) Navigator.of(dialogContext).pop();
+                            } catch (e) {
+                              setState(() {
+                                error = 'No se pudo quitar: $e';
+                                enviando = false;
+                              });
+                            }
+                          },
+                    child: const Text('Quitar acceso', style: TextStyle(color: Colors.red)),
+                  ),
+                TextButton(
+                  onPressed: enviando ? null : () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Cancelar'),
+                ),
+                FilledButton(
+                  onPressed: enviando
+                      ? null
+                      : () async {
+                          if (seleccionado == null) {
+                            setState(() => error = 'Elige un participante de la lista.');
+                            return;
+                          }
+                          setState(() {
+                            enviando = true;
+                            error = null;
+                          });
+                          try {
+                            await ref.read(usuariosServiceProvider).vincularParticipanteExistente(
+                                  usuarioObjetivoId: usuario.id,
+                                  usuarioAVincularId: seleccionado!.id,
+                                );
+                            ref.invalidate(usuariosProvider);
+                            if (dialogContext.mounted) Navigator.of(dialogContext).pop();
+                          } catch (e) {
+                            setState(() {
+                              error = 'No se pudo vincular: $e';
+                              enviando = false;
+                            });
+                          }
+                        },
+                  child: enviando
+                      ? const SizedBox(
+                          width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Text('Vincular'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
@@ -240,7 +475,7 @@ class _AdminUsuariosPageState extends ConsumerState<AdminUsuariosPage> {
   }
 
   Future<void> _showCrearUsuarioDialog(BuildContext context, WidgetRef ref) async {
-    final usuarios = await ref.read(usuariosProvider.future);
+    final usuarios = ref.read(usuariosProvider).value ?? [];
     final paises = await ref.read(paisesProvider.future);
     final estados = await ref.read(estadosProvider.future);
     final ciudades = await ref.read(ciudadesProvider.future);
@@ -267,6 +502,7 @@ class _AdminUsuariosPageState extends ConsumerState<AdminUsuariosPage> {
     var estadoId = estados.first.id;
     var ciudadId = ciudades.first.id;
     var sexo = 'M';
+    var mostrarPassword = false;
 
     await showDialog<void>(
       context: context,
@@ -297,10 +533,30 @@ class _AdminUsuariosPageState extends ConsumerState<AdminUsuariosPage> {
                       decoration: const InputDecoration(labelText: 'Correo'),
                       keyboardType: TextInputType.emailAddress,
                     ),
-                    TextField(
-                      controller: passwordController,
-                      decoration: const InputDecoration(labelText: 'Contraseña temporal'),
-                      obscureText: true,
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: passwordController,
+                            decoration: const InputDecoration(labelText: 'Contraseña temporal'),
+                            obscureText: !mostrarPassword,
+                          ),
+                        ),
+                        IconButton(
+                          icon: Icon(mostrarPassword ? Icons.visibility_off : Icons.visibility),
+                          tooltip: mostrarPassword ? 'Ocultar' : 'Mostrar',
+                          onPressed: () => setState(() => mostrarPassword = !mostrarPassword),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.casino_outlined),
+                          tooltip: 'Generar contraseña',
+                          onPressed: () => setState(() {
+                            passwordController.text = _generarPasswordAleatoria();
+                            mostrarPassword = true;
+                          }),
+                        ),
+                      ],
                     ),
                     DropdownButtonFormField<String>(
                       initialValue: sexo,
@@ -401,6 +657,61 @@ class _AdminUsuariosPageState extends ConsumerState<AdminUsuariosPage> {
     );
   }
 
+  Future<void> _showMasOpciones(
+    BuildContext context,
+    WidgetRef ref,
+    UsuarioAdminModel usuario,
+  ) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.edit_outlined),
+                title: const Text('Editar información'),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  _showEditarInfoDialog(context, ref, usuario);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.admin_panel_settings_outlined),
+                title: const Text('Asignar rol'),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  _showAsignarRolDialog(context, ref, usuario);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.favorite_outline),
+                title: const Text('Vincular pareja'),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  _showAsignarParejaDialog(context, ref, usuario);
+                },
+              ),
+              ListTile(
+                leading: Icon(
+                  Icons.key,
+                  color: usuario.correoAlterna != null ? AppColors.secondary : null,
+                ),
+                title: const Text('Segundo acceso'),
+                subtitle: const Text('Mismos pronósticos, mismo lugar en ranking'),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  _showCredencialAlternaDialog(context, ref, usuario);
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _showEditarInfoDialog(
     BuildContext context,
     WidgetRef ref,
@@ -416,10 +727,12 @@ class _AdminUsuariosPageState extends ConsumerState<AdminUsuariosPage> {
     final apellidosController = TextEditingController(text: usuario.apellidos);
     final telefonoController = TextEditingController(text: usuario.telefono);
     final correoController = TextEditingController(text: usuario.correo);
+    final passwordController = TextEditingController();
 
     var paisId = usuario.paisId;
     var estadoId = usuario.estadoId;
     var ciudadId = usuario.ciudadId;
+    var mostrarPassword = false;
 
     await showDialog<void>(
       context: context,
@@ -447,13 +760,33 @@ class _AdminUsuariosPageState extends ConsumerState<AdminUsuariosPage> {
                       ),
                       keyboardType: TextInputType.emailAddress,
                     ),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: TextButton.icon(
-                        icon: const Icon(Icons.lock_reset, size: 18),
-                        label: const Text('Restablecer contraseña'),
-                        onPressed: () => _confirmarRestablecerPassword(dialogContext, ref, usuario),
-                      ),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: passwordController,
+                            decoration: const InputDecoration(
+                              labelText: 'Nueva contraseña (opcional)',
+                              helperText: 'Déjala vacía para no cambiarla',
+                            ),
+                            obscureText: !mostrarPassword,
+                          ),
+                        ),
+                        IconButton(
+                          icon: Icon(mostrarPassword ? Icons.visibility_off : Icons.visibility),
+                          tooltip: mostrarPassword ? 'Ocultar' : 'Mostrar',
+                          onPressed: () => setState(() => mostrarPassword = !mostrarPassword),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.casino_outlined),
+                          tooltip: 'Generar contraseña',
+                          onPressed: () => setState(() {
+                            passwordController.text = _generarPasswordAleatoria();
+                            mostrarPassword = true;
+                          }),
+                        ),
+                      ],
                     ),
                     TextField(
                       controller: telefonoController,
@@ -507,9 +840,36 @@ class _AdminUsuariosPageState extends ConsumerState<AdminUsuariosPage> {
                             estadoId: estadoId,
                           );
 
+                      String? nuevaPasswordMostrar;
+                      if (passwordController.text.trim().isNotEmpty) {
+                        nuevaPasswordMostrar = await ref.read(usuariosServiceProvider).restablecerPassword(
+                              usuarioId: usuario.id,
+                              nuevaPassword: passwordController.text,
+                            );
+                      }
+
                       ref.invalidate(usuariosProvider);
 
                       if (dialogContext.mounted) Navigator.pop(dialogContext);
+
+                      if (nuevaPasswordMostrar != null && context.mounted) {
+                        await showDialog<void>(
+                          context: context,
+                          builder: (confirmContext) => AlertDialog(
+                            title: const Text('Contraseña actualizada'),
+                            content: SelectableText(
+                              'Contraseña nueva de ${usuario.nombreCompleto}:\n\n$nuevaPasswordMostrar\n\n'
+                              'Compártesela por WhatsApp o el medio que uses — solo se muestra esta vez.',
+                            ),
+                            actions: [
+                              FilledButton(
+                                onPressed: () => Navigator.pop(confirmContext),
+                                child: const Text('Entendido'),
+                              ),
+                            ],
+                          ),
+                        );
+                      }
                     } catch (e) {
                       ScaffoldMessenger.of(dialogContext).showSnackBar(
                         SnackBar(content: Text('No se pudo guardar: $e')),
@@ -586,62 +946,9 @@ class _AdminUsuariosPageState extends ConsumerState<AdminUsuariosPage> {
     );
   }
 
-  Future<void> _confirmarRestablecerPassword(
-    BuildContext context,
-    WidgetRef ref,
-    UsuarioAdminModel usuario,
-  ) async {
-    final confirmar = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Restablecer contraseña'),
-        content: Text(
-          'Se va a generar una contraseña temporal nueva para ${usuario.nombreCompleto}. '
-          'Su contraseña actual dejará de funcionar. ¿Continuar?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Restablecer'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmar != true) return;
-    if (!context.mounted) return;
-
-    try {
-      final nuevaPassword = await ref.read(usuariosServiceProvider).restablecerPassword(usuarioId: usuario.id);
-
-      if (!context.mounted) return;
-      await showDialog<void>(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: const Text('Nueva contraseña generada'),
-          content: SelectableText(
-            'Contraseña temporal de ${usuario.nombreCompleto}:\n\n$nuevaPassword\n\n'
-            'Compártesela por WhatsApp o el medio que uses — solo se muestra esta vez, '
-            'no queda guardada en ningún lado para volver a verla.',
-          ),
-          actions: [
-            FilledButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Entendido'),
-            ),
-          ],
-        ),
-      );
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('No se pudo restablecer: $e')),
-        );
-      }
-    }
+  String _generarPasswordAleatoria() {
+    const alfabeto = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+    final random = Random();
+    return List.generate(10, (_) => alfabeto[random.nextInt(alfabeto.length)]).join();
   }
 }

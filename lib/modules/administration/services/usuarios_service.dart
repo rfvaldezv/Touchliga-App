@@ -80,8 +80,17 @@ class UsuariosService {
 
   /// Regresa la nueva contraseña temporal en texto plano (una sola
   /// vez) para que el admin se la comparta al participante.
-  Future<String> restablecerPassword({required int usuarioId}) async {
-    final response = await _apiClient.post('/api/usuarios/$usuarioId/restablecer-password');
+  /// Regresa la nueva contraseña temporal en texto plano (una sola
+  /// vez) para que el admin se la comparta al participante. Si se
+  /// manda [nuevaPassword], se usa esa; si no, el servidor genera
+  /// una aleatoria.
+  Future<String> restablecerPassword({required int usuarioId, String? nuevaPassword}) async {
+    final response = await _apiClient.post(
+      '/api/usuarios/$usuarioId/restablecer-password',
+      body: nuevaPassword != null && nuevaPassword.trim().isNotEmpty
+          ? {'nuevaPassword': nuevaPassword.trim()}
+          : null,
+    );
     return (response.data?['password'] ?? '').toString();
   }
 
@@ -90,6 +99,53 @@ class UsuariosService {
     await _apiClient.put(
       '/api/usuarios/$usuarioId/estatus',
       body: {'usuarioId': usuarioId, 'estatus': estatus},
+    );
+  }
+
+  /// Vincula (o desvincula, mandando parejaId: null) a este
+  /// participante con otro como pareja/equipo -- solo visual.
+  Future<void> asignarPareja({required int usuarioId, int? parejaId, String? nombreEquipo}) async {
+    await _apiClient.put(
+      '/api/usuarios/$usuarioId/pareja',
+      body: {'parejaId': parejaId, 'nombreEquipo': nombreEquipo},
+    );
+  }
+
+  /// Registra (o reemplaza) un segundo correo+contraseña que puede
+  /// iniciar sesión COMO este mismo participante -- mismos
+  /// pronósticos, mismos puntos, mismo Id.
+  Future<void> agregarCredencialAlterna({
+    required int usuarioId,
+    required String correo,
+    required String password,
+  }) async {
+    await _apiClient.put(
+      '/api/usuarios/$usuarioId/credencial-alterna',
+      body: {'correo': correo, 'password': password},
+    );
+  }
+
+  Future<void> quitarCredencialAlterna({required int usuarioId}) async {
+    await _apiClient.delete('/api/usuarios/$usuarioId/credencial-alterna');
+  }
+
+  /// Toma a un participante YA REGISTRADO y lo vincula como segundo
+  /// acceso de otro, usando su correo+contraseña ya existentes.
+  Future<void> vincularParticipanteExistente({
+    required int usuarioObjetivoId,
+    required int usuarioAVincularId,
+  }) async {
+    await _apiClient.put(
+      '/api/usuarios/$usuarioObjetivoId/vincular-existente/$usuarioAVincularId',
+    );
+  }
+
+  Future<void> desvincularParticipante({
+    required int usuarioObjetivoId,
+    required int usuarioVinculadoId,
+  }) async {
+    await _apiClient.delete(
+      '/api/usuarios/$usuarioObjetivoId/vincular-existente/$usuarioVinculadoId',
     );
   }
 }

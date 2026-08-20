@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../shared/design_system/tokens/app_spacing.dart';
+import '../../../shared/utils/whatsapp_helper.dart';
 import '../../../shared/providers/seleccion_provider.dart';
 import '../../communication/providers/communication_provider.dart';
 import '../../temporadas/providers/temporada_provider.dart';
@@ -19,6 +21,15 @@ class AdminPagosPage extends ConsumerStatefulWidget {
 class _AdminPagosPageState extends ConsumerState<AdminPagosPage> {
   bool _modoSeleccion = false;
   final Set<int> _seleccionados = {};
+  final _busquedaController = TextEditingController();
+  String _busqueda = '';
+  String? _filtroEstatus; // null = todos, 'completo', 'parcial', 'pendiente'
+
+  @override
+  void dispose() {
+    _busquedaController.dispose();
+    super.dispose();
+  }
 
   void _alternarSeleccion(int usuarioId) {
     setState(() {
@@ -99,6 +110,21 @@ class _AdminPagosPageState extends ConsumerState<AdminPagosPage> {
           final completos = estatus.where((e) => e.pagoCompleto).length;
           final quienesDeben = estatus.where((e) => !e.pagoCompleto).map((e) => e.usuarioId).toSet();
 
+          final busquedaNormalizada = _busqueda.trim().toLowerCase();
+
+          final estatusFiltrado = estatus.where((item) {
+            final coincideTexto = busquedaNormalizada.isEmpty ||
+                item.usuarioNombre.toLowerCase().contains(busquedaNormalizada);
+
+            final esParcialItem = !item.pagoCompleto && item.totalPagado > 0;
+            final coincideEstatus = _filtroEstatus == null ||
+                (_filtroEstatus == 'completo' && item.pagoCompleto) ||
+                (_filtroEstatus == 'parcial' && esParcialItem) ||
+                (_filtroEstatus == 'pendiente' && !item.pagoCompleto && !esParcialItem);
+
+            return coincideTexto && coincideEstatus;
+          }).toList();
+
           return Column(
             children: [
               Padding(
@@ -126,15 +152,77 @@ class _AdminPagosPageState extends ConsumerState<AdminPagosPage> {
                   ],
                 ),
               ),
+              if (!_modoSeleccion) ...[
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(AppSpacing.md, 0, AppSpacing.md, AppSpacing.sm),
+                  child: TextField(
+                    controller: _busquedaController,
+                    decoration: InputDecoration(
+                      hintText: 'Buscar por nombre...',
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: _busqueda.isEmpty
+                          ? null
+                          : IconButton(
+                              icon: const Icon(Icons.close),
+                              onPressed: () => setState(() {
+                                _busquedaController.clear();
+                                _busqueda = '';
+                              }),
+                            ),
+                      border: const OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                    onChanged: (value) => setState(() => _busqueda = value),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md).copyWith(bottom: AppSpacing.sm),
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        ChoiceChip(
+                          label: const Text('Todos'),
+                          selected: _filtroEstatus == null,
+                          onSelected: (_) => setState(() => _filtroEstatus = null),
+                        ),
+                        const SizedBox(width: AppSpacing.xs),
+                        ChoiceChip(
+                          label: const Text('Completos'),
+                          selected: _filtroEstatus == 'completo',
+                          onSelected: (_) => setState(() => _filtroEstatus = 'completo'),
+                        ),
+                        const SizedBox(width: AppSpacing.xs),
+                        ChoiceChip(
+                          label: const Text('Parciales'),
+                          selected: _filtroEstatus == 'parcial',
+                          onSelected: (_) => setState(() => _filtroEstatus = 'parcial'),
+                        ),
+                        const SizedBox(width: AppSpacing.xs),
+                        ChoiceChip(
+                          label: const Text('Pendientes'),
+                          selected: _filtroEstatus == 'pendiente',
+                          onSelected: (_) => setState(() => _filtroEstatus = 'pendiente'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+              if (estatusFiltrado.isEmpty)
+                const Expanded(
+                  child: Center(child: Text('Ningún participante coincide con el filtro.')),
+                )
+              else
               Expanded(
                 child: RefreshIndicator(
                   onRefresh: () async => ref.invalidate(estatusPagosProvider(temporadaId)),
                   child: ListView.separated(
                     padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-                    itemCount: estatus.length,
+                    itemCount: estatusFiltrado.length,
                     separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.sm),
                     itemBuilder: (context, index) {
-                      final item = estatus[index];
+                      final item = estatusFiltrado[index];
                       final esParcial = !item.pagoCompleto && item.totalPagado > 0;
                       final seleccionado = _seleccionados.contains(item.usuarioId);
 
@@ -166,16 +254,34 @@ class _AdminPagosPageState extends ConsumerState<AdminPagosPage> {
                                     ? 'Parcial: \$${item.totalPagado.toStringAsFixed(2)} de \$${item.cuota.toStringAsFixed(2)} (faltan \$${item.saldoPendiente.toStringAsFixed(2)})'
                                     : 'Pendiente — \$${item.cuota.toStringAsFixed(2)}',
                           ),
-                          trailing: _modoSeleccion || item.pagoCompleto
+                          trailing: _modoSeleccion
                               ? null
-                              : FilledButton(
-                                  onPressed: () => _showRegistrarPagoDialog(
-                                    context,
-                                    ref,
-                                    item,
-                                    temporadaId,
-                                  ),
-                                  child: Text(esParcial ? 'Registrar resto' : 'Marcar pagado'),
+                              : Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (!item.pagoCompleto && item.telefono != null && item.telefono!.isNotEmpty) ...[
+                                      IconButton(
+                                        tooltip: 'WhatsApp (recordatorio de saldo)',
+                                        icon: const Icon(Icons.chat_bubble_outline, color: Colors.green),
+                                        onPressed: () => _abrirWhatsAppSaldo(item.telefono!, item.usuarioNombre, item.saldoPendiente),
+                                      ),
+                                      IconButton(
+                                        tooltip: 'WhatsApp (escribir mensaje)',
+                                        icon: const Icon(Icons.edit_note, color: Colors.green),
+                                        onPressed: () => _abrirWhatsAppPersonalizado(context, item.telefono!, item.usuarioNombre),
+                                      ),
+                                    ],
+                                    if (!item.pagoCompleto)
+                                      FilledButton(
+                                        onPressed: () => _showRegistrarPagoDialog(
+                                          context,
+                                          ref,
+                                          item,
+                                          temporadaId,
+                                        ),
+                                        child: Text(esParcial ? 'Registrar resto' : 'Registrar pago'),
+                                      ),
+                                  ],
                                 ),
                         ),
                       );
@@ -188,13 +294,69 @@ class _AdminPagosPageState extends ConsumerState<AdminPagosPage> {
         },
       ),
       floatingActionButton: _modoSeleccion && _seleccionados.isNotEmpty
-          ? FloatingActionButton.extended(
-              onPressed: () => _showCobranzaDialog(context, ref),
-              icon: const Icon(Icons.send),
-              label: Text('Enviar cobranza (${_seleccionados.length})'),
+          ? Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                FloatingActionButton.extended(
+                  heroTag: 'whatsapp-masivo',
+                  backgroundColor: Colors.green,
+                  onPressed: () => _enviarWhatsAppMasivo(context, ref),
+                  icon: const Icon(Icons.chat_bubble_outline),
+                  label: Text('WhatsApp (${_seleccionados.length})'),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                FloatingActionButton.extended(
+                  heroTag: 'cobranza-app',
+                  onPressed: () => _showCobranzaDialog(context, ref),
+                  icon: const Icon(Icons.send),
+                  label: Text('Enviar cobranza (${_seleccionados.length})'),
+                ),
+              ],
             )
           : null,
     );
+  }
+
+  Future<void> _enviarWhatsAppMasivo(BuildContext context, WidgetRef ref) async {
+    final temporadaId = ref.read(seleccionProvider).temporadaId;
+    if (temporadaId == null) return;
+
+    final estatus = ref.read(estatusPagosProvider(temporadaId)).value ?? [];
+    final seleccionadosConTelefono = estatus
+        .where((e) => _seleccionados.contains(e.usuarioId) && e.telefono != null && e.telefono!.isNotEmpty)
+        .toList();
+
+    if (seleccionadosConTelefono.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Ninguno de los seleccionados tiene teléfono registrado.')),
+      );
+      return;
+    }
+
+    for (final item in seleccionadosConTelefono) {
+      final numeroLimpio = item.telefono!.replaceAll(RegExp(r'[^\d]'), '');
+      final primerNombre = item.usuarioNombre.split(' ').first;
+      final mensaje =
+          'Hola $primerNombre! 🏈 Te recuerdo que tienes un saldo pendiente de \$${item.saldoPendiente.toStringAsFixed(2)} '
+          'en Touchliga. ¡Gracias por tu apoyo!';
+
+      final uri = Uri.parse('whatsapp://send?phone=$numeroLimpio&text=${Uri.encodeComponent(mensaje)}');
+      if (await canLaunchUrl(uri)) await launchUrl(uri, mode: LaunchMode.externalApplication);
+
+      // Pausa entre cada uno -- le da tiempo a WhatsApp Web/tu
+      // automatización de clic de procesar antes de abrir el
+      // siguiente, y reduce el riesgo de que el navegador bloquee
+      // varias ventanas abriéndose de golpe.
+      await esperarAntesDelSiguienteWhatsApp();
+    }
+
+    if (context.mounted) {
+      setState(() {
+        _modoSeleccion = false;
+        _seleccionados.clear();
+      });
+    }
   }
 
   Future<void> _showCobranzaDialog(BuildContext context, WidgetRef ref) async {
@@ -381,6 +543,58 @@ class _AdminPagosPageState extends ConsumerState<AdminPagosPage> {
               ],
             );
           },
+        );
+      },
+    );
+  }
+
+  Future<void> _abrirWhatsAppSaldo(String telefono, String nombre, double saldoPendiente) async {
+    final numeroLimpio = telefono.replaceAll(RegExp(r'[^\d]'), '');
+    final primerNombre = nombre.split(' ').first;
+    final mensaje =
+        'Hola $primerNombre! 🏈 Te recuerdo que tienes un saldo pendiente de \$${saldoPendiente.toStringAsFixed(2)} '
+        'en Touchliga. ¡Gracias por tu apoyo!';
+
+    final uri = Uri.parse('whatsapp://send?phone=$numeroLimpio&text=${Uri.encodeComponent(mensaje)}');
+    if (await canLaunchUrl(uri)) await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  Future<void> _abrirWhatsAppPersonalizado(BuildContext context, String telefono, String nombre) async {
+    final controller = TextEditingController();
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text('Mensaje para $nombre'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            maxLines: 4,
+            decoration: const InputDecoration(
+              hintText: 'Escribe tu mensaje...',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton.icon(
+              icon: const Icon(Icons.send, size: 18),
+              label: const Text('Abrir WhatsApp'),
+              onPressed: () async {
+                final numeroLimpio = telefono.replaceAll(RegExp(r'[^\d]'), '');
+                final texto = controller.text.trim();
+                final uri = Uri.parse(
+                  'whatsapp://send?phone=$numeroLimpio${texto.isEmpty ? '' : '&text=${Uri.encodeComponent(texto)}'}',
+                );
+                if (await canLaunchUrl(uri)) await launchUrl(uri, mode: LaunchMode.externalApplication);
+                if (dialogContext.mounted) Navigator.of(dialogContext).pop();
+              },
+            ),
+          ],
         );
       },
     );

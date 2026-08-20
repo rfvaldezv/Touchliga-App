@@ -7,6 +7,12 @@ import 'app/app.dart';
 import 'app/bootstrap.dart';
 import 'core/storage/preferences_storage.dart';
 
+/// Referencia global al contenedor de Riverpod -- necesaria para que
+/// código fuera del árbol de widgets (como el listener de push en
+/// segundo plano) pueda invalidar providers (ej. el conteo de
+/// mensajes sin leer) cuando llega una notificación.
+final ProviderContainer container = ProviderContainer();
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -25,9 +31,9 @@ Future<void> main() async {
       await Firebase.initializeApp(
         options: const FirebaseOptions(
           apiKey: 'AIzaSyDhvodzRm-t8iWbTsqAXs0Gq2srkErJBas',
-          authDomain: 'touchliga-1a796.firebaseapp.com',
-          projectId: 'touchliga-1a796',
-          storageBucket: 'touchliga-1a796.firebasestorage.app',
+          authDomain: 'futliga-1a796.firebaseapp.com',
+          projectId: 'futliga-1a796',
+          storageBucket: 'futliga-1a796.firebasestorage.app',
           messagingSenderId: '371860469223',
           appId: '1:371860469223:web:cc19def30a5d1810917942',
           measurementId: 'G-F846LYGJJW',
@@ -45,5 +51,5 @@ Future<void> main() async {
     }
   }
 
-  runApp(const ProviderScope(child: TouchligaApp()));
+  runApp(UncontrolledProviderScope(container: container, child: const TouchligaApp()));
 }

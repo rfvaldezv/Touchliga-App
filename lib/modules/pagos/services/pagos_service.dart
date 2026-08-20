@@ -47,6 +47,27 @@ class PagosService {
     await _apiClient.delete('/api/pagos/$id');
   }
 
+  /// Corrige un pago ya registrado -- pensado sobre todo para
+  /// arreglar datos que llegaron mal desde la migración del sistema
+  /// viejo.
+  Future<void> editarPago({
+    required int id,
+    required double monto,
+    required String metodoPago,
+    required DateTime fechaPago,
+    String? referencia,
+  }) async {
+    await _apiClient.put(
+      '/api/pagos/$id',
+      body: {
+        'monto': monto,
+        'metodoPago': metodoPago,
+        'fechaPago': fechaPago.toIso8601String(),
+        'referencia': referencia,
+      },
+    );
+  }
+
   /// Crea la sesión de pago con tarjeta y regresa la URL de Stripe
   /// Checkout — la app la abre en el navegador, no hay SDK nativo
   /// de por medio. [tipoPago]: "Completo" o "Mitad".

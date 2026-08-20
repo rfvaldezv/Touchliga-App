@@ -133,7 +133,7 @@ class _PredictionPageState extends ConsumerState<PredictionPage> {
           IconButton(
             icon: const Icon(Icons.emoji_events_outlined),
             tooltip: 'Ver clasificación',
-            onPressed: () => context.go(AppRouteNames.standings),
+            onPressed: () => context.go('/administration/ranking?jornadaId=$_jornadaId'),
           ),
         ],
       ),

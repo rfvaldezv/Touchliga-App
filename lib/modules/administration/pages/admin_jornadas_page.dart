@@ -159,6 +159,14 @@ class AdminJornadasPage extends ConsumerWidget {
                   contentPadding: EdgeInsets.zero,
                 ),
               ),
+              PopupMenuItem(
+                value: 'configuracion-smtp',
+                child: ListTile(
+                  leading: Icon(Icons.mail_outline),
+                  title: Text('Configurar correo'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
             ],
           ),
         ],

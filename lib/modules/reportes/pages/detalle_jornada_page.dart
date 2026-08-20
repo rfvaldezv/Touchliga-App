@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../shared/design_system/tokens/app_spacing.dart';
 import '../../administration/providers/administration_provider.dart';
@@ -226,6 +227,7 @@ class _TablaDetalle extends ConsumerWidget {
           child: SingleChildScrollView(
           controller: controladorScrollTabla,
           scrollDirection: Axis.horizontal,
+          child: SingleChildScrollView(
           child: DataTable(
             columnSpacing: 0,
             horizontalMargin: 12,
@@ -253,6 +255,13 @@ class _TablaDetalle extends ConsumerWidget {
                             _EscudoMini(url: partido.escudoLocalUrl),
                             const SizedBox(width: 2),
                             _EscudoMini(url: partido.escudoVisitanteUrl),
+                            if (partido.equipoGanadorReal != null) ...[
+                              const SizedBox(width: 2),
+                              InkWell(
+                                onTap: () => _abrirResumen(partido.localNombre, partido.visitanteNombre),
+                                child: const Icon(Icons.play_circle_fill, color: Colors.red, size: 16),
+                              ),
+                            ],
                           ],
                         ),
                       ],
@@ -349,10 +358,20 @@ class _TablaDetalle extends ConsumerWidget {
             }).toList(),
           ),
           ),
+          ),
         );
       },
     );
   }
+}
+
+/// Abre una búsqueda de YouTube con los resúmenes/highlights del
+/// partido -- sin guardar nada, se arma el enlace al vuelo con los
+/// nombres de los equipos.
+Future<void> _abrirResumen(String local, String visitante) async {
+  final busqueda = Uri.encodeComponent('$local vs $visitante highlights NFL');
+  final uri = Uri.parse('https://www.youtube.com/results?search_query=$busqueda');
+  if (await canLaunchUrl(uri)) await launchUrl(uri, mode: LaunchMode.externalApplication);
 }
 
 class _EscudoMini extends StatelessWidget {

@@ -16,6 +16,13 @@ import 'api_response.dart';
 ///  - Loguear requests/responses en desarrollo.
 ///  - Centralizar el manejo de errores 401/403/etc.
 class ApiClient {
+  /// Se dispara UNA vez cuando el token expira de verdad (ni el
+  /// access token ni el refresh token sirven ya). La app lo conecta
+  /// al arrancar (ver AuthNotifier) para mandar al usuario al login
+  /// con un mensaje claro, en vez de dejar que cada pantalla falle
+  /// distinto y en silencio.
+  static void Function(String mensaje)? onSesionExpirada;
+
   ApiClient({Dio? dio})
     : _dio =
           dio ??
@@ -72,6 +79,13 @@ class ApiClient {
                 // error original en vez de ocultarlo.
               }
             }
+
+            // Ni el token actual ni el refresh sirvieron -- la sesión
+            // ya no es válida de verdad. En vez de dejar que cada
+            // pantalla falle con un error críptico distinto, se avisa
+            // una sola vez, claro, y se manda al usuario al login.
+            await SecureStorage.clearSession();
+            onSesionExpirada?.call('Tu sesión expiró — por favor inicia sesión de nuevo.');
           }
 
           handler.next(error);
@@ -210,6 +224,43 @@ class ApiClient {
       );
 
       return response.data as T;
+    } on DioException catch (e) {
+      throw _mapError(e);
+    }
+  }
+
+  /// Para endpoints que regresan un valor simple (int, bool, string),
+  /// no un objeto ni una lista -- ej. un conteo.
+  Future<T> getForValue<T>(
+    String endpoint, {
+    String? token,
+  }) async {
+    try {
+      final response = await _dio.get(
+        endpoint,
+        options: _optionsFor(token),
+      );
+
+      return response.data as T;
+    } on DioException catch (e) {
+      throw _mapError(e);
+    }
+  }
+
+  /// Para descargar archivos binarios (PDF, imágenes, etc.) -- regresa
+  /// los bytes crudos, no los intenta parsear como JSON.
+  Future<List<int>> getBytes(
+    String endpoint, {
+    String? token,
+  }) async {
+    try {
+      final opciones = _optionsFor(token) ?? Options();
+      final response = await _dio.get<List<int>>(
+        endpoint,
+        options: opciones.copyWith(responseType: ResponseType.bytes),
+      );
+
+      return response.data!;
     } on DioException catch (e) {
       throw _mapError(e);
     }

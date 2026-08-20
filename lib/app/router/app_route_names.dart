@@ -26,7 +26,6 @@ class AppRouteNames {
   static const results = '/results';
 
   // Tabla de posiciones
-  static const standings = '/standings';
 
   // Perfil
   static const profile = '/profile';

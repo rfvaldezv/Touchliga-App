@@ -12,7 +12,12 @@ import '../providers/reportes_provider.dart';
 /// las jornadas), o se puede filtrar a una sola jornada tocándola,
 /// y regresar al acumulado tocando el botón verde de nuevo.
 class RankingPage extends ConsumerStatefulWidget {
-  const RankingPage({super.key});
+  const RankingPage({super.key, this.jornadaInicial});
+
+  /// Si se pasa, la pantalla abre ya filtrada a esa jornada (en vez
+  /// del acumulado general) -- ej. al venir del trofeo dentro de
+  /// Pronósticos, para una jornada específica.
+  final int? jornadaInicial;
 
   @override
   ConsumerState<RankingPage> createState() => _RankingPageState();
@@ -21,6 +26,12 @@ class RankingPage extends ConsumerStatefulWidget {
 class _RankingPageState extends ConsumerState<RankingPage> {
   int? _temporadaId;
   int? _jornadaFiltro;
+
+  @override
+  void initState() {
+    super.initState();
+    _jornadaFiltro = widget.jornadaInicial;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -183,14 +194,30 @@ Widget _conDivisor(Widget child) {
   );
 }
 
-Widget _celdaNombre(String nombre, int posicion, bool esMio) {
+/// Calcula la posición de cada quien respetando empates (ranking de
+/// competencia: si 2 empatan en 1er lugar, ambos son 1, y el
+/// siguiente es 3, no 2) -- requiere la lista YA ordenada de mayor a
+/// menor puntos.
+List<int> _calcularPosiciones(List<int> puntosOrdenados) {
+  final posiciones = <int>[];
+  for (var i = 0; i < puntosOrdenados.length; i++) {
+    if (i > 0 && puntosOrdenados[i] == puntosOrdenados[i - 1]) {
+      posiciones.add(posiciones[i - 1]);
+    } else {
+      posiciones.add(i + 1);
+    }
+  }
+  return posiciones;
+}
+
+Widget _celdaNombre(String nombre, int posicion, bool esMio, {bool mostrarMedalla = false, bool tienePareja = false, String? nombreEquipo}) {
   return _conDivisor(
     ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 160),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (posicion <= 3)
+          if (mostrarMedalla && posicion <= 3)
             Text(
               posicion == 1 ? '🥇' : (posicion == 2 ? '🥈' : '🥉'),
               style: const TextStyle(fontSize: 14),
@@ -205,6 +232,13 @@ Widget _celdaNombre(String nombre, int posicion, bool esMio) {
               style: esMio ? const TextStyle(fontWeight: FontWeight.bold) : null,
             ),
           ),
+          if (tienePareja) ...[
+            const SizedBox(width: 4),
+            Tooltip(
+              message: nombreEquipo != null ? 'Equipo: $nombreEquipo' : 'Juega en pareja',
+              child: const Text('💑', style: TextStyle(fontSize: 12)),
+            ),
+          ],
         ],
       ),
     ),
@@ -230,6 +264,7 @@ class _TablaAcumulada extends ConsumerWidget {
       child: SingleChildScrollView(
       controller: controladorScroll,
       scrollDirection: Axis.horizontal,
+      child: SingleChildScrollView(
       child: DataTable(
         columnSpacing: 0,
         horizontalMargin: 12,
@@ -251,15 +286,19 @@ class _TablaAcumulada extends ConsumerWidget {
           DataColumn(label: _conDivisor(const Text('Total'))),
           const DataColumn(label: Text('%')),
         ],
-        rows: filas.asMap().entries.map((entry) {
-          final posicion = entry.key + 1;
+        rows: () {
+          final posiciones = _calcularPosiciones(filas.map((f) => f.totalPuntos).toList());
+          final mostrarMedalla = jornadasHeader.isNotEmpty && jornadasHeader.last.todosLosPartidosConResultado;
+
+          return filas.asMap().entries.map((entry) {
+          final posicion = posiciones[entry.key];
           final RankingModel fila = entry.value;
           final esMio = fila.usuarioId == miUsuarioId;
 
           return DataRow(
             color: esMio ? WidgetStateProperty.all(Colors.amber.withValues(alpha: 0.25)) : null,
             cells: [
-              DataCell(_celdaNombre(fila.nombre, posicion, esMio)),
+              DataCell(_celdaNombre(fila.nombre, posicion, esMio, mostrarMedalla: mostrarMedalla, tienePareja: fila.tienePareja, nombreEquipo: fila.nombreEquipo)),
               for (final jornada in fila.jornadas)
                 DataCell(
                   _conDivisor(
@@ -278,7 +317,9 @@ class _TablaAcumulada extends ConsumerWidget {
               DataCell(Text('${fila.porcentajeProductividad.toStringAsFixed(0)}%')),
             ],
           );
-        }).toList(),
+          }).toList();
+        }(),
+      ),
       ),
       ),
     );
@@ -315,6 +356,7 @@ class _TablaJornadaUnica extends ConsumerWidget {
       child: SingleChildScrollView(
       controller: controladorScroll,
       scrollDirection: Axis.horizontal,
+      child: SingleChildScrollView(
       child: DataTable(
         columnSpacing: 0,
         horizontalMargin: 12,
@@ -323,8 +365,12 @@ class _TablaJornadaUnica extends ConsumerWidget {
           DataColumn(label: _conDivisor(const Text('Puntos'))),
           const DataColumn(label: Text('%')),
         ],
-        rows: filasDeEstaJornada.asMap().entries.map((entry) {
-          final posicion = entry.key + 1;
+        rows: () {
+          final posiciones = _calcularPosiciones(filasDeEstaJornada.map((f) => f.jornada.puntos).toList());
+          final mostrarMedalla = filasDeEstaJornada.isNotEmpty && filasDeEstaJornada.first.jornada.todosLosPartidosConResultado;
+
+          return filasDeEstaJornada.asMap().entries.map((entry) {
+          final posicion = posiciones[entry.key];
           final fila = entry.value.fila;
           final jornada = entry.value.jornada;
           final esMio = fila.usuarioId == miUsuarioId;
@@ -336,7 +382,7 @@ class _TablaJornadaUnica extends ConsumerWidget {
           return DataRow(
             color: esMio ? WidgetStateProperty.all(Colors.amber.withValues(alpha: 0.25)) : null,
             cells: [
-              DataCell(_celdaNombre(fila.nombre, posicion, esMio)),
+              DataCell(_celdaNombre(fila.nombre, posicion, esMio, mostrarMedalla: mostrarMedalla, tienePareja: fila.tienePareja, nombreEquipo: fila.nombreEquipo)),
               DataCell(
                 _conDivisor(
                   Text(jornada.puntos.toString(), style: const TextStyle(fontWeight: FontWeight.bold)),
@@ -345,7 +391,9 @@ class _TablaJornadaUnica extends ConsumerWidget {
               DataCell(Text('$porcentaje%')),
             ],
           );
-        }).toList(),
+          }).toList();
+        }(),
+      ),
       ),
       ),
     );

@@ -4,6 +4,8 @@ class DetallePartidoModel {
     required this.puntos,
     this.escudoLocalUrl,
     this.escudoVisitanteUrl,
+    this.localNombre = '',
+    this.visitanteNombre = '',
     this.equipoGanadorReal,
     this.equipoGanadorPronostico,
     this.esDesempate = false,
@@ -18,6 +20,8 @@ class DetallePartidoModel {
   final int? puntos;
   final String? escudoLocalUrl;
   final String? escudoVisitanteUrl;
+  final String localNombre;
+  final String visitanteNombre;
   final int? equipoGanadorReal;
   final int? equipoGanadorPronostico;
   final bool esDesempate;
@@ -33,6 +37,8 @@ class DetallePartidoModel {
       puntos: (json['puntos'] as num?)?.toInt(),
       escudoLocalUrl: json['escudoLocalUrl']?.toString(),
       escudoVisitanteUrl: json['escudoVisitanteUrl']?.toString(),
+      localNombre: (json['localNombre'] ?? '').toString(),
+      visitanteNombre: (json['visitanteNombre'] ?? '').toString(),
       equipoGanadorReal: (json['equipoGanadorReal'] as num?)?.toInt(),
       equipoGanadorPronostico: (json['equipoGanadorPronostico'] as num?)?.toInt(),
       esDesempate: json['esDesempate'] as bool? ?? false,

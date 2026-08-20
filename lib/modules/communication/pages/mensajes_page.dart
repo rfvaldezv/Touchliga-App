@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/router/app_route_names.dart';
 import '../../../shared/design_system/tokens/app_spacing.dart';
-import '../models/contacto_model.dart';
 import '../providers/communication_provider.dart';
 
 class MensajesPage extends ConsumerWidget {
@@ -67,100 +66,10 @@ class MensajesPage extends ConsumerWidget {
         },
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showElegirDestinatarioDialog(context, ref),
+        onPressed: () => context.push('${AppRouteNames.messages}/nuevo'),
         icon: const Icon(Icons.edit),
         label: const Text('Escribir'),
       ),
-    );
-  }
-
-  Future<void> _showElegirDestinatarioDialog(BuildContext context, WidgetRef ref) async {
-    List<ContactoModel> participantes;
-
-    try {
-      participantes = await ref.read(todosLosParticipantesProvider.future);
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('No se pudo cargar la lista de participantes: $e')),
-        );
-      }
-      return;
-    }
-
-    if (!context.mounted) return;
-
-    if (participantes.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No hay otros participantes registrados todavía.')),
-      );
-      return;
-    }
-
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      builder: (sheetContext) {
-        var busqueda = '';
-
-        return StatefulBuilder(
-          builder: (sheetContext, setState) {
-            final filtrados = busqueda.isEmpty
-                ? participantes
-                : participantes
-                    .where((p) => p.nombre.toLowerCase().contains(busqueda.toLowerCase()))
-                    .toList();
-
-            return SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.all(AppSpacing.md),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text('Escribir a...'),
-                    const SizedBox(height: AppSpacing.sm),
-                    TextField(
-                      decoration: const InputDecoration(
-                        hintText: 'Buscar participante',
-                        prefixIcon: Icon(Icons.search, size: 18),
-                      ),
-                      onChanged: (value) => setState(() => busqueda = value),
-                    ),
-                    SizedBox(
-                      height: 300,
-                      child: ListView(
-                        children: [
-                          for (final ContactoModel participante in filtrados)
-                            ListTile(
-                              leading: CircleAvatar(
-                                child: Text(
-                                  participante.nombre.isNotEmpty
-                                      ? participante.nombre[0].toUpperCase()
-                                      : '?',
-                                ),
-                              ),
-                              title: Text(participante.nombre),
-                              subtitle: participante.roles.isNotEmpty
-                                  ? Text(participante.roles.join(', '))
-                                  : null,
-                              onTap: () {
-                                Navigator.pop(sheetContext);
-                                context.push(
-                                  '${AppRouteNames.messages}/${participante.usuarioId}',
-                                  extra: participante.nombre,
-                                );
-                              },
-                            ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
     );
   }
 }

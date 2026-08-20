@@ -1,12 +1,15 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../modules/dashboard/pages/dashboard_page.dart';
 import '../../modules/administration/pages/admin_jornadas_page.dart';
+import '../../modules/configuracion/pages/admin_configuracion_smtp_page.dart';
 import '../../modules/administration/pages/admin_estados_page.dart';
 import '../../modules/administration/pages/admin_ciudades_page.dart';
 import '../../modules/administration/pages/admin_jornada_detail_page.dart';
+import '../../modules/reportes/pages/participantes_pendientes_page.dart';
 import '../../modules/administration/pages/admin_usuarios_page.dart';
 import '../../modules/sponsors/pages/admin_patrocinadores_page.dart';
 import '../../modules/pagos/pages/admin_pagos_page.dart';
@@ -24,6 +27,7 @@ import '../../modules/temporadas/pages/admin_temporadas_page.dart';
 import '../../shared/pages/admin_catalogo_page.dart';
 import '../../modules/communication/pages/anuncios_page.dart';
 import '../../modules/communication/pages/mensajes_page.dart';
+import '../../modules/communication/pages/nuevo_mensaje_page.dart';
 import '../../modules/communication/pages/conversacion_page.dart';
 import '../../modules/jornadas/pages/jornadas_select_page.dart';
 import '../../modules/leagues/pages/leagues_page.dart';
@@ -35,7 +39,6 @@ import '../../modules/predictions/pages/prediction_page.dart';
 import '../../modules/profile/pages/profile_page.dart';
 import '../../modules/results/pages/results_page.dart';
 import '../../modules/splash/pages/splash_page.dart';
-import '../../modules/standings/pages/standings_page.dart';
 import 'app_route_names.dart';
 
 /// Traduce los cambios del [authProvider] en notificaciones que GoRouter
@@ -118,6 +121,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               final id = int.parse(state.pathParameters['id']!);
               return AdminJornadaDetailPage(jornadaId: id);
             },
+            routes: [
+              GoRoute(
+                path: 'pendientes',
+                name: 'admin-jornada-pendientes',
+                builder: (context, state) {
+                  final id = int.parse(state.pathParameters['id']!);
+                  return ParticipantesPendientesPage(jornadaId: id);
+                },
+              ),
+            ],
           ),
           GoRoute(
             path: 'usuarios',
@@ -155,6 +168,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             builder: (context, state) => const AdminConfiguracionPremiosPage(),
           ),
           GoRoute(
+            path: 'configuracion-smtp',
+            name: 'admin-configuracion-smtp',
+            builder: (context, state) => const AdminConfiguracionSmtpPage(),
+          ),
+          GoRoute(
             path: 'equipos',
             name: 'admin-equipos',
             builder: (context, state) => const AdminEquiposPage(),
@@ -172,7 +190,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: 'ranking',
             name: 'ranking',
-            builder: (context, state) => const RankingPage(),
+            builder: (context, state) {
+              final jornadaInicial = int.tryParse(state.uri.queryParameters['jornadaId'] ?? '');
+              return RankingPage(jornadaInicial: jornadaInicial);
+            },
           ),
           GoRoute(
             path: 'temporadas',
@@ -220,6 +241,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const MensajesPage(),
         routes: [
           GoRoute(
+            path: 'nuevo',
+            name: 'nuevo-mensaje',
+            builder: (context, state) => const NuevoMensajePage(),
+          ),
+          GoRoute(
             path: ':id',
             name: 'conversacion',
             builder: (context, state) {
@@ -234,6 +260,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRouteNames.miPago,
         name: 'mi-pago',
+        // Solo existe en la versión web -- en Android/iOS no debe
+        // haber ningún rastro de una pantalla de pagos, ni por deep
+        // link directo, para que quede completamente fuera de lo
+        // que Google revisa en el build de la tienda.
+        redirect: (context, state) => kIsWeb ? null : AppRouteNames.home,
         builder: (context, state) => const MiPagoPage(),
       ),
 
@@ -290,12 +321,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRouteNames.results,
         name: 'results',
         builder: (context, state) => const ResultsPage(),
-      ),
-
-      GoRoute(
-        path: AppRouteNames.standings,
-        name: 'standings',
-        builder: (context, state) => const StandingsPage(),
       ),
 
       GoRoute(

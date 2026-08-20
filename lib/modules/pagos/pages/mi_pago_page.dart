@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../../app/router/app_route_names.dart';
 import '../../../shared/design_system/tokens/app_spacing.dart';
@@ -9,9 +8,10 @@ import '../../temporadas/providers/temporada_provider.dart';
 import '../models/resumen_pago_model.dart';
 import '../providers/pagos_provider.dart';
 
-/// Pantalla del participante para ver el estatus de su cuota y
-/// pagarla con tarjeta (Stripe Checkout) — completa o a la mitad —
-/// si todavía no lo ha hecho.
+/// Pantalla del participante para ver el estatus de su cuota --
+/// solo informativa. El pago en sí se sigue haciendo por fuera de
+/// la app (transferencia, efectivo, etc.), como se hacía antes;
+/// aquí solo se refleja lo que el admin ya registró en Pagos.
 class MiPagoPage extends ConsumerStatefulWidget {
   const MiPagoPage({super.key});
 
@@ -19,59 +19,8 @@ class MiPagoPage extends ConsumerStatefulWidget {
   ConsumerState<MiPagoPage> createState() => _MiPagoPageState();
 }
 
-class _MiPagoPageState extends ConsumerState<MiPagoPage> with WidgetsBindingObserver {
+class _MiPagoPageState extends ConsumerState<MiPagoPage> {
   int? _temporadaId;
-  String? _tipoPagoEnProceso;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Cuando el navegador se va a otra pestaña (a pagar en Stripe) y
-    // luego vuelves a esta, el sistema manda "resumed" — ahí
-    // aprovechamos para refrescar solos, sin que tengas que salir y
-    // volver a entrar a mano.
-    if (state == AppLifecycleState.resumed && _temporadaId != null) {
-      ref.invalidate(miPagoProvider(_temporadaId!));
-    }
-  }
-
-  Future<void> _pagarConTarjeta(String tipoPago) async {
-    if (_temporadaId == null) return;
-
-    setState(() => _tipoPagoEnProceso = tipoPago);
-
-    try {
-      final url = await ref
-          .read(pagosServiceProvider)
-          .iniciarCheckout(_temporadaId!, tipoPago: tipoPago);
-      final abrio = await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-
-      if (!abrio && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No se pudo abrir la página de pago.')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('No se pudo iniciar el pago: $e')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _tipoPagoEnProceso = null);
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -154,51 +103,26 @@ class _MiPagoPageState extends ConsumerState<MiPagoPage> with WidgetsBindingObse
                             ],
                             if (!resumen.pagoCompleto) ...[
                               const SizedBox(height: AppSpacing.lg),
-                              const Text(
-                                '¿Cómo quieres pagar?',
-                                style: TextStyle(fontWeight: FontWeight.bold),
-                              ),
-                              const SizedBox(height: AppSpacing.sm),
-                              FilledButton.icon(
-                                onPressed: _tipoPagoEnProceso != null
-                                    ? null
-                                    : () => _pagarConTarjeta('Completo'),
-                                icon: _tipoPagoEnProceso == 'Completo'
-                                    ? const SizedBox(
-                                        width: 16,
-                                        height: 16,
-                                        child: CircularProgressIndicator(strokeWidth: 2),
-                                      )
-                                    : const Icon(Icons.credit_card),
-                                label: Text(
-                                  'Pagar completo (\$${resumen.saldoPendiente.toStringAsFixed(2)})',
-                                ),
-                              ),
-                              const SizedBox(height: AppSpacing.sm),
-                              // Solo tiene sentido ofrecer "la mitad" si
-                              // el saldo pendiente todavía alcanza para
-                              // una mitad completa (si ya solo falta
-                              // menos de eso, se le pide pagar el resto).
-                              if (resumen.saldoPendiente >= resumen.cuota / 2)
-                                OutlinedButton.icon(
-                                  onPressed: _tipoPagoEnProceso != null
-                                      ? null
-                                      : () => _pagarConTarjeta('Mitad'),
-                                  icon: _tipoPagoEnProceso == 'Mitad'
-                                      ? const SizedBox(
-                                          width: 16,
-                                          height: 16,
-                                          child: CircularProgressIndicator(strokeWidth: 2),
-                                        )
-                                      : const Icon(Icons.credit_card_outlined),
-                                  label: Text(
-                                    'Pagar la mitad (\$${(resumen.cuota / 2).toStringAsFixed(2)})',
+                              Card(
+                                color: Colors.blue.shade50,
+                                child: Padding(
+                                  padding: const EdgeInsets.all(AppSpacing.md),
+                                  child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Icon(Icons.info_outline, color: Colors.blue.shade700),
+                                      const SizedBox(width: AppSpacing.sm),
+                                      Expanded(
+                                        child: Text(
+                                          'Para cubrir tu saldo pendiente, contacta al '
+                                          'administrador de tu liga -- él registrará tu pago '
+                                          'aquí en cuanto lo reciba.',
+                                          style: TextStyle(color: Colors.blue.shade900),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
-                              const SizedBox(height: 4),
-                              const Text(
-                                'Se abre la página segura de Stripe en tu navegador.',
-                                style: TextStyle(fontSize: 11, color: Colors.grey),
                               ),
                             ],
                           ],

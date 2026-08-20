@@ -276,12 +276,13 @@ class _FilaParticipante extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(participante.nombre, style: const TextStyle(fontWeight: FontWeight.w600)),
-                Text(
-                  tipoPremio == 'Efectivo' || participante.motivo != null
-                      ? '\$${montoFinal.toStringAsFixed(2)}'
-                      : 'Regalo',
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
-                ),
+                if (esAdmin)
+                  Text(
+                    tipoPremio == 'Efectivo' || participante.motivo != null
+                        ? '\$${montoFinal.toStringAsFixed(2)}'
+                        : 'Regalo',
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
                 if (participante.motivo != null)
                   Text(
                     'Motivo: ${participante.motivo}',
