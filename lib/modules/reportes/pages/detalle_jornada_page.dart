@@ -167,11 +167,48 @@ class _LeyendaColor extends StatelessWidget {
   }
 }
 
-class _TablaDetalle extends ConsumerWidget {
+class _TablaDetalle extends ConsumerStatefulWidget {
   const _TablaDetalle({required this.jornadaId, required this.temporadaId});
 
   final int jornadaId;
   final int temporadaId;
+
+  @override
+  ConsumerState<_TablaDetalle> createState() => _TablaDetalleState();
+}
+
+class _TablaDetalleState extends ConsumerState<_TablaDetalle> {
+  // Dos ScrollControllers horizontales (uno para el encabezado fijo,
+  // otro para el cuerpo con scroll vertical) sincronizados a mano --
+  // así el encabezado con los partidos se queda arriba mientras se
+  // baja por la lista de participantes, y ambos se mueven juntos si
+  // hay muchos partidos y hace falta scroll lateral.
+  final _horizontalHeader = ScrollController();
+  final _horizontalBody = ScrollController();
+  final _vertical = ScrollController();
+  bool _sincronizando = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _horizontalHeader.addListener(() => _sincronizar(_horizontalHeader, _horizontalBody));
+    _horizontalBody.addListener(() => _sincronizar(_horizontalBody, _horizontalHeader));
+  }
+
+  void _sincronizar(ScrollController origen, ScrollController destino) {
+    if (_sincronizando || !destino.hasClients) return;
+    _sincronizando = true;
+    destino.jumpTo(origen.offset.clamp(0, destino.position.maxScrollExtent));
+    _sincronizando = false;
+  }
+
+  @override
+  void dispose() {
+    _horizontalHeader.dispose();
+    _horizontalBody.dispose();
+    _vertical.dispose();
+    super.dispose();
+  }
 
   Color _colorDePuntos(int? puntos) {
     if (puntos == null) return Colors.grey.shade300;
@@ -179,9 +216,20 @@ class _TablaDetalle extends ConsumerWidget {
     return const Color(0xFFFF1307);
   }
 
+  Widget _conDivisor(Widget child) {
+    return Container(
+      decoration: BoxDecoration(
+        border: Border(right: BorderSide(color: Colors.grey.shade300)),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      alignment: Alignment.centerLeft,
+      child: child,
+    );
+  }
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final detalleAsync = ref.watch(detalleJornadaProvider(jornadaId));
+  Widget build(BuildContext context) {
+    final detalleAsync = ref.watch(detalleJornadaProvider(widget.jornadaId));
     final miUsuarioId = ref.watch(authProvider).user?.userId;
     final esAdmin = ref.watch(authProvider).user?.roles.contains('Administrador') ?? false;
 
@@ -200,7 +248,7 @@ class _TablaDetalle extends ConsumerWidget {
           // El estatus de pagos es solo para el administrador — el
           // endpoint mismo lo rechaza para cualquier otro rol, así
           // que ni se pide si no aplica.
-          final pagosAsync = ref.watch(estatusPagosProvider(temporadaId));
+          final pagosAsync = ref.watch(estatusPagosProvider(widget.temporadaId));
 
           if (pagosAsync.hasValue) {
             for (final p in pagosAsync.value!) {
@@ -209,156 +257,204 @@ class _TablaDetalle extends ConsumerWidget {
           }
         }
 
-        Widget conDivisor(Widget child) {
-          return Container(
-            decoration: BoxDecoration(
-              border: Border(right: BorderSide(color: Colors.grey.shade300)),
+        // Anchos fijos por columna -- los mismos para el encabezado
+        // fijo de arriba y el cuerpo que se desplaza, para que las
+        // columnas queden perfectamente alineadas entre los dos.
+        // Un poco más anchas que en FutLiga porque el encabezado
+        // aquí puede decir "Total: X (dif: Y)".
+        const anchoParticipante = 170.0;
+        const anchoPago = 80.0;
+        const anchoPartido = 118.0;
+        const anchoTotal = 60.0;
+
+        final anchoTotalTabla = anchoParticipante +
+            (esAdmin ? anchoPago : 0) +
+            (partidosHeader.length * anchoPartido) +
+            anchoTotal;
+
+        Widget celdaHeaderPartido(DetallePartidoModel partido) {
+          return _conDivisor(
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (partido.esDesempate)
+                  const Text('⭐', style: TextStyle(fontSize: 10)),
+                Text(
+                  partido.puntosTotalesReal != null
+                      ? 'Total: ${partido.puntosTotalesReal} (dif: ${partido.diferenciaPuntosReal})'
+                      : (partido.equipoGanadorReal != null ? 'Jugado' : 'Por jugar'),
+                  style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 2),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _EscudoMini(url: partido.escudoLocalUrl),
+                    const SizedBox(width: 2),
+                    _EscudoMini(url: partido.escudoVisitanteUrl),
+                    if (partido.equipoGanadorReal != null) ...[
+                      const SizedBox(width: 2),
+                      InkWell(
+                        onTap: () => _abrirResumen(partido.localNombre, partido.visitanteNombre),
+                        child: const Icon(Icons.play_circle_fill, color: Colors.red, size: 16),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            child: child,
           );
         }
 
-        final controladorScrollTabla = ScrollController();
-        return Scrollbar(
-          controller: controladorScrollTabla,
-          thumbVisibility: true,
-          trackVisibility: true,
-          child: SingleChildScrollView(
-          controller: controladorScrollTabla,
-          scrollDirection: Axis.horizontal,
-          child: SingleChildScrollView(
-          child: DataTable(
-            columnSpacing: 0,
-            horizontalMargin: 12,
-            columns: [
-              DataColumn(label: conDivisor(const Text('Participante'))),
-              if (esAdmin) DataColumn(label: conDivisor(const Text('Pago'))),
-              for (final partido in partidosHeader)
-                DataColumn(
-                  label: conDivisor(
-                    Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (partido.esDesempate)
-                          const Text('⭐', style: TextStyle(fontSize: 10)),
-                        Text(
-                          partido.puntosTotalesReal != null
-                              ? 'Total: ${partido.puntosTotalesReal} (dif: ${partido.diferenciaPuntosReal})'
-                              : (partido.equipoGanadorReal != null ? 'Jugado' : 'Por jugar'),
-                          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 2),
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            _EscudoMini(url: partido.escudoLocalUrl),
-                            const SizedBox(width: 2),
-                            _EscudoMini(url: partido.escudoVisitanteUrl),
-                            if (partido.equipoGanadorReal != null) ...[
-                              const SizedBox(width: 2),
-                              InkWell(
-                                onTap: () => _abrirResumen(partido.localNombre, partido.visitanteNombre),
-                                child: const Icon(Icons.play_circle_fill, color: Colors.red, size: 16),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ],
+        final filasEncabezado = TableRow(
+          decoration: BoxDecoration(color: Colors.grey.shade100),
+          children: [
+            _conDivisor(const Text('Participante', style: TextStyle(fontWeight: FontWeight.bold))),
+            if (esAdmin)
+              _conDivisor(const Text('Pago', style: TextStyle(fontWeight: FontWeight.bold))),
+            for (final partido in partidosHeader) celdaHeaderPartido(partido),
+            _conDivisor(const Text('Total', style: TextStyle(fontWeight: FontWeight.bold))),
+          ],
+        );
+
+        final filasCuerpo = filas.map((DetalleJornadaModel fila) {
+          final esMio = fila.usuarioId == miUsuarioId;
+          final monto = pagosPorUsuario[fila.usuarioId];
+
+          return TableRow(
+            decoration: BoxDecoration(
+              color: esMio ? Colors.amber.withValues(alpha: 0.25) : null,
+            ),
+            children: [
+              _conDivisor(
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 160),
+                  child: Text(
+                    esMio ? '${fila.nombre} (Tú)' : fila.nombre,
+                    overflow: TextOverflow.ellipsis,
+                    style: esMio ? const TextStyle(fontWeight: FontWeight.bold) : null,
+                  ),
+                ),
+              ),
+              if (esAdmin)
+                _conDivisor(
+                  Text(
+                    monto != null ? '\$${monto.toStringAsFixed(2)}' : '-',
+                    style: TextStyle(
+                      color: (monto ?? 0) > 0 ? Colors.green.shade700 : Colors.red,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
-              const DataColumn(label: Text('Total')),
-            ],
-            rows: filas.map((DetalleJornadaModel fila) {
-              final esMio = fila.usuarioId == miUsuarioId;
-              final monto = pagosPorUsuario[fila.usuarioId];
-
-              return DataRow(
-                color: esMio
-                    ? WidgetStateProperty.all(Colors.amber.withValues(alpha: 0.25))
-                    : null,
-                cells: [
-                  DataCell(
-                    conDivisor(
-                      ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 160),
+              for (final partido in fila.partidos)
+                _conDivisor(
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (partido.equipoGanadorPronostico == null)
+                        const Text('-', style: TextStyle(fontSize: 12))
+                      else
+                        Icon(
+                          partido.puntos == 1 ? Icons.check_circle : Icons.cancel,
+                          size: 14,
+                          color: partido.puntos == 1 ? const Color(0xFF31F077) : const Color(0xFFFF1307),
+                        ),
+                      const SizedBox(width: 4),
+                      Container(
+                        width: 20,
+                        height: 20,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: _colorDePuntos(partido.puntos),
+                          shape: BoxShape.circle,
+                        ),
                         child: Text(
-                          esMio ? '${fila.nombre} (Tú)' : fila.nombre,
-                          overflow: TextOverflow.ellipsis,
-                          style: esMio ? const TextStyle(fontWeight: FontWeight.bold) : null,
+                          partido.puntos?.toString() ?? '-',
+                          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
                         ),
                       ),
-                    ),
-                  ),
-                  if (esAdmin)
-                    DataCell(
-                      conDivisor(
+                      if (partido.esDesempate && partido.puntosTotalesPredichos != null) ...[
+                        const SizedBox(width: 4),
                         Text(
-                          monto != null ? '\$${monto.toStringAsFixed(2)}' : '-',
-                          style: TextStyle(
-                            color: (monto ?? 0) > 0 ? Colors.green.shade700 : Colors.red,
-                            fontWeight: FontWeight.w600,
+                          '(${partido.puntosTotalesPredichos}/${partido.diferenciaPuntosPredicha ?? '-'})',
+                          style: const TextStyle(fontSize: 10, color: Colors.grey),
+                        ),
+                        if (partido.puntosBono > 0)
+                          const Padding(
+                            padding: EdgeInsets.only(left: 2),
+                            child: Text('⭐', style: TextStyle(fontSize: 12)),
                           ),
+                      ],
+                    ],
+                  ),
+                ),
+              _conDivisor(
+                Text(
+                  fila.total.toString(),
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          );
+        }).toList();
+
+        final columnWidths = <int, TableColumnWidth>{
+          0: const FixedColumnWidth(anchoParticipante),
+          if (esAdmin) 1: const FixedColumnWidth(anchoPago),
+          for (int i = 0; i < partidosHeader.length; i++)
+            (esAdmin ? 2 : 1) + i: const FixedColumnWidth(anchoPartido),
+          (esAdmin ? 2 : 1) + partidosHeader.length: const FixedColumnWidth(anchoTotal),
+        };
+
+        return Column(
+          children: [
+            // --- Encabezado FIJO: no baja con el scroll vertical ---
+            Scrollbar(
+              controller: _horizontalHeader,
+              thumbVisibility: true,
+              child: SingleChildScrollView(
+                controller: _horizontalHeader,
+                scrollDirection: Axis.horizontal,
+                child: SizedBox(
+                  width: anchoTotalTabla,
+                  child: Table(
+                    columnWidths: columnWidths,
+                    children: [filasEncabezado],
+                  ),
+                ),
+              ),
+            ),
+            const Divider(height: 1, thickness: 1.5),
+
+            // --- Cuerpo con scroll vertical, sincronizado en horizontal con el encabezado ---
+            Expanded(
+              child: Scrollbar(
+                controller: _vertical,
+                thumbVisibility: true,
+                child: SingleChildScrollView(
+                  controller: _vertical,
+                  scrollDirection: Axis.vertical,
+                  child: Scrollbar(
+                    controller: _horizontalBody,
+                    thumbVisibility: true,
+                    notificationPredicate: (notif) => notif.depth == 1,
+                    child: SingleChildScrollView(
+                      controller: _horizontalBody,
+                      scrollDirection: Axis.horizontal,
+                      child: SizedBox(
+                        width: anchoTotalTabla,
+                        child: Table(
+                          columnWidths: columnWidths,
+                          children: filasCuerpo,
                         ),
                       ),
-                    ),
-                  for (final partido in fila.partidos)
-                    DataCell(
-                      conDivisor(
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (partido.equipoGanadorPronostico == null)
-                              const Text('-', style: TextStyle(fontSize: 12))
-                            else
-                              Icon(
-                                partido.puntos == 1 ? Icons.check_circle : Icons.cancel,
-                                size: 14,
-                                color: partido.puntos == 1 ? const Color(0xFF31F077) : const Color(0xFFFF1307),
-                              ),
-                            const SizedBox(width: 4),
-                            Container(
-                              width: 20,
-                              height: 20,
-                              alignment: Alignment.center,
-                              decoration: BoxDecoration(
-                                color: _colorDePuntos(partido.puntos),
-                                shape: BoxShape.circle,
-                              ),
-                              child: Text(
-                                partido.puntos?.toString() ?? '-',
-                                style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                            if (partido.esDesempate && partido.puntosTotalesPredichos != null) ...[
-                              const SizedBox(width: 4),
-                              Text(
-                                '(${partido.puntosTotalesPredichos}/${partido.diferenciaPuntosPredicha ?? '-'})',
-                                style: const TextStyle(fontSize: 10, color: Colors.grey),
-                              ),
-                              if (partido.puntosBono > 0)
-                                const Padding(
-                                  padding: EdgeInsets.only(left: 2),
-                                  child: Text('⭐', style: TextStyle(fontSize: 12)),
-                                ),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ),
-                  DataCell(
-                    Text(
-                      fila.total.toString(),
-                      style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                   ),
-                ],
-              );
-            }).toList(),
-          ),
-          ),
-          ),
+                ),
+              ),
+            ),
+          ],
         );
       },
     );

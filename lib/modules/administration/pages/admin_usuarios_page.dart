@@ -54,6 +54,17 @@ class _AdminUsuariosPageState extends ConsumerState<AdminUsuariosPage> {
             return coincideTexto && coincideEstatus;
           }).toList();
 
+          // "Activos" de verdad: estatus Activo Y que no sea una cuenta
+          // vinculada (una vinculada ya no es una vía de juego por
+          // separado -- ver Usuario.EsCuentaVinculada -- así que no debe
+          // sumar como un participante más). Se calcula sobre el total
+          // sin filtrar, para que el número no cambie según el chip de
+          // estatus/búsqueda que se tenga seleccionado.
+          final totalActivos = todosLosUsuarios
+              .where((u) => u.estatus == 'Activo' && !u.esCuentaVinculada)
+              .length;
+          final totalUsuarios = todosLosUsuarios.length;
+
           return Column(
             children: [
               Padding(
@@ -109,6 +120,14 @@ class _AdminUsuariosPageState extends ConsumerState<AdminUsuariosPage> {
                       ),
                     ],
                   ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(AppSpacing.md, 0, AppSpacing.md, AppSpacing.sm),
+                child: Text(
+                  '$totalActivos participante${totalActivos == 1 ? '' : 's'} activo${totalActivos == 1 ? '' : 's'} '
+                  '(de $totalUsuarios en total)',
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                 ),
               ),
               Expanded(
@@ -669,6 +688,22 @@ class _AdminUsuariosPageState extends ConsumerState<AdminUsuariosPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              // Antes solo se podía cambiar el estatus (incluida "Baja
+              // definitiva") tocando la etiqueta de color junto al nombre
+              // en la lista -- sin ningún ícono ni aviso de que fuera
+              // tocable, así que no era fácil de encontrar. Se agrega
+              // aquí también, como acción explícita del menú.
+              ListTile(
+                leading: Icon(
+                  usuario.activo ? Icons.toggle_off_outlined : Icons.toggle_on_outlined,
+                ),
+                title: const Text('Cambiar estatus'),
+                subtitle: const Text('Activo, inactivo temporal o baja definitiva'),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  _showCambiarEstatusDialog(context, ref, usuario);
+                },
+              ),
               ListTile(
                 leading: const Icon(Icons.edit_outlined),
                 title: const Text('Editar información'),

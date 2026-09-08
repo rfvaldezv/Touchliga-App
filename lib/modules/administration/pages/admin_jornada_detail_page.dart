@@ -11,6 +11,17 @@ import '../../../shared/utils/pdf_downloader.dart';
 import '../models/partido_model.dart';
 import '../providers/administration_provider.dart';
 
+/// El formulario de "Nuevo partido"/"Editar partido" ya captura fecha y
+/// hora (ver showDatePicker/showTimePicker más abajo), pero la lista de
+/// partidos ya registrados no los mostraba -- solo estadio y resultado.
+/// Mismo estilo sin acentos ni dependencias nuevas que ya se usa en esos
+/// diálogos (day/month/year, hour:minute con padLeft), en vez de traer
+/// package:intl solo para esto.
+String _formatoFechaHora(DateTime fechaHora) {
+  String dos(int n) => n.toString().padLeft(2, '0');
+  return '${dos(fechaHora.day)}/${dos(fechaHora.month)}/${fechaHora.year} ${dos(fechaHora.hour)}:${dos(fechaHora.minute)}';
+}
+
 class AdminJornadaDetailPage extends ConsumerWidget {
   const AdminJornadaDetailPage({super.key, required this.jornadaId});
 
@@ -109,6 +120,7 @@ class AdminJornadaDetailPage extends ConsumerWidget {
                             partido.tieneResultado
                                 ? 'Resultado: ${partido.golesLocal} - ${partido.golesVisitante}'
                                 : 'Sin resultado capturado',
+                            _formatoFechaHora(partido.fechaHora),
                             if (partido.canchaNombre != null) partido.canchaNombre!,
                             if (partido.esDesempate) 'Partido de desempate',
                           ].join(' · '),

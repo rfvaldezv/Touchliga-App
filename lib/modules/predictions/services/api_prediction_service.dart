@@ -70,6 +70,8 @@ class ApiPredictionService implements PredictionService {
         diferenciaPuntosPredicha: (miPronostico?['diferenciaPuntosPredicha'] as num?)?.toInt(),
         puntosTotalesReal: (partido['puntosTotalesReal'] as num?)?.toInt(),
         diferenciaPuntosReal: (partido['diferenciaPuntosReal'] as num?)?.toInt(),
+        realGolesLocal: partido['golesLocal'] as int?,
+        realGolesVisitante: partido['golesVisitante'] as int?,
         locked: cerrada,
       );
     }).toList();

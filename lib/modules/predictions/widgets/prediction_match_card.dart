@@ -170,6 +170,18 @@ class _PredictionMatchCardState extends State<PredictionMatchCard> {
             const Divider(height: 1),
             const SizedBox(height: 10),
 
+            if (widget.match.tieneResultadoReal) ...[
+              Text(
+                'Resultado: ${widget.match.realGolesLocal}-${widget.match.realGolesVisitante}',
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.primary,
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+
             Wrap(
               alignment: WrapAlignment.center,
               spacing: 14,

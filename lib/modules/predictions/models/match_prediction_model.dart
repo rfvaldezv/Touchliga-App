@@ -18,6 +18,8 @@ class MatchPredictionModel {
     this.diferenciaPuntosPredicha,
     this.puntosTotalesReal,
     this.diferenciaPuntosReal,
+    this.realGolesLocal,
+    this.realGolesVisitante,
     this.locked = false,
   });
 
@@ -64,10 +66,18 @@ class MatchPredictionModel {
   final int? puntosTotalesReal;
   final int? diferenciaPuntosReal;
 
+  /// Marcador REAL del partido (goles/anotaciones de cada equipo)
+  /// una vez jugado -- para mostrarlo en pantalla, aunque la
+  /// predicción en sí solo sea sobre el ganador.
+  final int? realGolesLocal;
+  final int? realGolesVisitante;
+
   /// Cuando inicia el partido ya no puede modificarse
   final bool locked;
 
   bool get completed => winnerTeamId != null;
+
+  bool get tieneResultadoReal => realGolesLocal != null && realGolesVisitante != null;
 
   bool get editable => !locked;
 
@@ -96,6 +106,8 @@ class MatchPredictionModel {
       diferenciaPuntosPredicha: diferenciaPuntosPredicha ?? this.diferenciaPuntosPredicha,
       puntosTotalesReal: puntosTotalesReal,
       diferenciaPuntosReal: diferenciaPuntosReal,
+      realGolesLocal: realGolesLocal,
+      realGolesVisitante: realGolesVisitante,
       locked: locked ?? this.locked,
     );
   }
